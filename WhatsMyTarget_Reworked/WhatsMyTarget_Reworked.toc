@@ -1,0 +1,11 @@
+## Interface: 120001
+## Title: WhatsMyTarget_Reworked
+## Notes: An unofficial edit for WhatsMyTarget, the simple addon that highlights your current target's nameplate with a custom color and a 25% scale increase.
+## Author: Setavai
+## Version: 1.0.0
+## RequiredDeps:
+## SavedVariables:
+## SavedVariablesPerCharacter:
+## IconTexture: Interface\AddOns\WhatsMyTarget_Reworked\icon.tga
+
+WhatsMyTarget_Reworked.lua
