@@ -1,8 +1,9 @@
 local UnitIsPlayer = UnitIsPlayer
 local UnitClass = UnitClass
-local UnitIsUnit = UnitIsUnit
+local UnitExists = UnitExists
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local GetNamePlateForUnit = C_NamePlate.GetNamePlateForUnit
+local InCombatLockdown = InCombatLockdown
 
 local prevFrame, prevUnit, prevHealthBar
 local prevR, prevG, prevB
@@ -15,7 +16,9 @@ local function ClearHighlight()
     if prevFrame then
         local uf = prevFrame.UnitFrame
         if uf and uf.__WMT_scaled and uf.__WMT_originalScale then
-            uf:SetScale(uf.__WMT_originalScale)
+            if not InCombatLockdown() then
+                uf:SetScale(uf.__WMT_originalScale)
+            end
             uf.__WMT_scaled = nil
         end
     end
@@ -37,7 +40,6 @@ end
 
 local function SetColorIfDifferent(bar, r, g, b)
     local cr, cg, cb = bar:GetStatusBarColor()
-
     if cr ~= r or cg ~= g or cb ~= b then
         bar:SetStatusBarColor(r, g, b)
     end
@@ -47,17 +49,17 @@ local function HighlightPlate(plate)
     if not plate then
         return
     end
-
     if prevFrame == plate then
         return
     end
 
     local uf = plate.UnitFrame
-    if not uf then
+    if not uf or not uf.unit then
         return
     end
 
     ClearHighlight()
+
     prevFrame = plate
     prevUnit = uf.unit
 
@@ -65,7 +67,7 @@ local function HighlightPlate(plate)
         uf.__WMT_originalScale = uf:GetScale()
     end
 
-    if not uf.__WMT_scaled then
+    if not uf.__WMT_scaled and not InCombatLockdown() then
         uf:SetScale(uf.__WMT_originalScale * 1.25)
         uf.__WMT_scaled = true
     end
@@ -81,6 +83,11 @@ local function HighlightPlate(plate)
 end
 
 local function UpdateHighlight()
+    if not UnitExists("target") then
+        ClearHighlight()
+        return
+    end
+
     local plate = GetNamePlateForUnit("target")
     if plate then
         HighlightPlate(plate)
@@ -90,42 +97,48 @@ local function UpdateHighlight()
 end
 
 local f = CreateFrame("Frame")
+
 f:RegisterEvent("PLAYER_TARGET_CHANGED")
 f:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 f:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 
-f:SetScript("OnEvent", function(_, event, unit)
-    if event == "PLAYER_TARGET_CHANGED" then
-        UpdateHighlight()
-    elseif event == "NAME_PLATE_UNIT_ADDED" then
-        if UnitIsUnit(unit, "target") then
-            HighlightPlate(GetNamePlateForUnit("target"))
+f:SetScript(
+    "OnEvent",
+    function(_, event, unit)
+        if event == "PLAYER_TARGET_CHANGED" then
+            UpdateHighlight()
+        elseif event == "NAME_PLATE_UNIT_ADDED" then
+            if unit == "target" then
+                UpdateHighlight()
+            end
+        elseif event == "NAME_PLATE_UNIT_REMOVED" then
+            if prevUnit and unit == prevUnit then
+                ClearHighlight()
+            end
         end
-    elseif event == "NAME_PLATE_UNIT_REMOVED" then
-        if prevUnit and unit == prevUnit then
-            ClearHighlight()
+    end
+)
+
+
+hooksecurefunc(
+    "CompactUnitFrame_UpdateHealth",
+    function(frame)
+        if not prevUnit then
+            return
         end
+        if not frame or frame.unit ~= prevUnit then
+            return
+        end
+
+        local healthBar = frame.healthBar
+        if not healthBar then
+            return
+        end
+
+        local r, g, b = GetTargetColor(prevUnit)
+        SetColorIfDifferent(healthBar, r, g, b)
     end
-end)
+)
 
-hooksecurefunc("CompactUnitFrame_UpdateHealthColor", function(frame)
-    if not frame or not frame.unit or not UnitIsUnit(frame.unit, "target") then
-        return
-    end
-
-    local plate = GetNamePlateForUnit("target")
-    if not plate then
-        return
-    end
-
-    local uf = plate.UnitFrame
-    local healthBar = uf and uf.healthBar
-    if not healthBar then
-        return
-    end
-
-    local r, g, b = GetTargetColor(frame.unit)
-    SetColorIfDifferent(healthBar, r, g, b)
-end)
-
+-- initial
 UpdateHighlight()
